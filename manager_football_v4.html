@@ -67,6 +67,23 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;max-
 .tnome.eu{color:var(--green);}
 .tnum{font-size:11px;text-align:center;color:var(--muted);}
 .tpts{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;text-align:center;}
+.calendario-round{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;}
+.calendario-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,230,118,.08);color:var(--green);font-size:10px;font-weight:700;margin-bottom:10px;}
+.calendario-match{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.calendario-match:last-child{border-bottom:none;}
+.calendario-clube{font-weight:700;}
+.agenda-clock{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--card);margin-bottom:12px;}
+.agenda-clock div{display:flex;flex-direction:column;gap:4px;}
+.agenda-clock .agenda-time{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;}
+.agenda-day{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
+.agenda-day-header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--muted);}
+.agenda-entry{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);}
+.agenda-entry:first-child{border-top:none;}
+.agenda-entry-time{font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--green);width:44px;}
+.agenda-entry-match{flex:1;display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;}
+.agenda-status{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.agenda-status.pendente{color:var(--yellow);}
+.agenda-status.jogado{color:var(--green);}
 .alerta{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px;}
 .alerta.warn{border-left-color:var(--yellow);}
 .alerta.info{border-left-color:var(--blue);}
@@ -336,6 +353,20 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;max-
   </div>
 </div>
 
+<!-- LIGA -->
+<div class="screen" id="s-liga">
+  <div class="hdr"><div class="htitle">Liga</div><div class="hsub">Classificação e agenda de jogos</div></div>
+  <div class="sec">
+    <div class="stitle">Relógio da liga</div>
+    <div class="agenda-clock">
+      <div><div class="agenda-time" id="l-clock">--:--</div><div style="font-size:11px;color:var(--muted);">Data e hora atual</div></div>
+      <button class="btn btn-g" onclick="avancarHora()" style="width:auto;padding:10px 14px;">+1h</button>
+    </div>
+  </div>
+  <div class="sec"><div class="stitle">Classificação</div><div id="l-tabela"></div></div>
+  <div class="sec"><div class="stitle">Agenda de 30 dias</div><div id="l-agenda"></div></div>
+</div>
+
 <!-- PARTIDA -->
 <div class="screen" id="s-partida">
   <div class="hdr"><div class="htitle">Partida</div><div class="hsub" id="pt-sub">Rodada</div></div>
@@ -457,6 +488,7 @@ body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;max-
   <div class="ni" onclick="nav('elenco',this)"><div class="ni-ic">👥</div><div class="ni-lb">Elenco</div></div>
   <div class="ni" onclick="nav('treino',this)"><div class="ni-ic">🏃</div><div class="ni-lb">Treino</div></div>
   <div class="ni" onclick="nav('mercado',this)"><div class="ni-ic">🔄</div><div class="ni-lb">Mercado</div></div>
+  <div class="ni" onclick="nav('liga',this)"><div class="ni-ic">🏆</div><div class="ni-lb">Liga</div></div>
   <div class="ni" onclick="nav('clube',this)"><div class="ni-ic">🏟️</div><div class="ni-lb">Clube</div></div>
 </nav>
 
@@ -553,9 +585,12 @@ function novoJogo(){
     subsFeitas:0,
     financeiro:{entradas:{bilheteria:0,patrocinio:50000,premiacoes:0,vendas:0},saidas:{folha:0,compras:0,operacional:50000},historico:[]},
     infraestrutura:{estadio:0,ct:0,medico:0,scout:0},
+    hora:8,
+    agenda:[],
     advAtual:null,
   };
   autoEscalar();
+  G.agenda=gerarAgenda(G.calendario);
   salvar();
 }
 
@@ -588,7 +623,77 @@ function gerarCal(times){
   return rods;
 }
 function salvar(){try{localStorage.setItem('mf3',JSON.stringify(G));}catch(e){}}
-function carregar(){try{const d=localStorage.getItem('mf3');if(d){G=JSON.parse(d);return true;}}catch(e){}return false;}
+function carregar(){try{const d=localStorage.getItem('mf3');if(d){G=JSON.parse(d);if(typeof G.hora!=='number')G.hora=8;if(!G.agenda||!G.agenda.length||G.agenda[0].g1===undefined)G.agenda=gerarAgenda();return true;}}catch(e){}return false;}
+
+function gerarAgenda(){
+  const eventos=[];
+  const cpuIds=G.times.slice(1).map((t,i)=>i+1);
+  const base=new Date(getDataAtual());base.setHours(0,0,0,0);
+  for(let dia=0;dia<30;dia++){
+    const dd=new Date(base);dd.setDate(base.getDate()+dia);
+    const casaOppo=cpuIds[(dia*2)%cpuIds.length];
+    const foraOppo=cpuIds[(dia*2+1)%cpuIds.length];
+    eventos.push({data:fmtData(dd),hora:11,rodada:dia+1,casa:0,fora:casaOppo,status:'pendente',g1:null,g2:null,res:null});
+    eventos.push({data:fmtData(dd),hora:16,rodada:dia+1,casa:foraOppo,fora:0,status:'pendente',g1:null,g2:null,res:null});
+  }
+  return eventos;
+}
+function parseDate(str){const [d,m,y]=str.split('/').map(Number);return new Date(y,m-1,d);}
+function avancarHora(){
+  G.hora++;
+  if(G.hora>=24){G.hora=0;avancarDia();}
+  processarAgenda();
+  salvar();
+  renderLiga();
+  renderTreino();
+  renderDash();
+}
+function processarAgenda(){
+  const data=fmtData(getDataAtual());
+  const eventos=G.agenda.filter(e=>e.data===data&&e.hora===G.hora&&e.status==='pendente');
+  if(!eventos.length)return;
+  eventos.forEach(e=>{simularEvento(e);e.status='jogado';});
+  salvar();
+  const h=String(G.hora).padStart(2,'0');
+  toast(`⚽ Jogos de ${h}:00 processados!`);
+}
+function simularEvento(e){
+  if(e.casa===0||e.fora===0){simularJogoUsuario(e);}else{simularJogoCPU(e);}  
+}
+function simularJogoCPU(e){
+  const tc=G.times[e.casa];const tf=G.times[e.fora];
+  const gc=calcGolsCPU(tc.nota,tf.nota);const gf=calcGolsCPU(tf.nota,tc.nota);
+  tc.j++;tf.j++;tc.gp+=gc;tc.gc+=gf;tf.gp+=gf;tf.gc+=gc;
+  if(gc>gf){tc.v++;tc.pts+=3;tf.d++;}else if(gc===gf){tc.e++;tc.pts++;tf.e++;tf.pts++;}else{tf.v++;tf.pts+=3;tc.d++;}
+}
+function simularJogoUsuario(e){
+  const mand=e.casa===0;
+  const adv=G.times[mand?e.fora:e.casa];
+  const meu=G.times[0];
+  const meuAtk=forcaAtaque();const meuDef=forcaDefesa();
+  const advAtk=Math.round(adv.nota*0.55+rnd(-4,4));const advDef=Math.round(adv.nota*0.48+rnd(-4,4));
+  const treinoBonus=G.treinosFeitos.length*1.5;
+  const meuGols=calcGolsV2(meuAtk+treinoBonus,advDef,G.moral,mand);
+  const advGols=calcGolsV2(advAtk,meuDef,50,!mand);
+  const [g1,g2]=mand?[meuGols,advGols]:[advGols,meuGols];
+  const res=g1>g2?'V':g1===g2?'E':'D';
+  meu.j++;meu.gp+=mand?g1:g2;meu.gc+=mand?g2:g1;
+  if(res==='V'){meu.v++;meu.pts+=3;}else if(res==='E'){meu.e++;meu.pts++;}else{meu.d++;}
+  adv.j++;adv.gp+=mand?g2:g1;adv.gc+=mand?g1:g2;
+  if(res==='D'){adv.v++;adv.pts+=3;}else if(res==='E'){adv.e++;adv.pts++;}else{adv.d++;}
+  const billBase=UPGRADES[0].niveis[G.infraestrutura.estadio].bill;
+  const bill=Math.round(billBase*(res==='V'?1.4:res==='E'?1:0.65)+rnd(-20000,20000));
+  G.saldo+=bill;G.financeiro.entradas.bilheteria+=bill; if(res==='D'){G.saldo-=20000;G.financeiro.historico.push({desc:'Penalidade derrota',val:-20000,data:fmtData(getDataAtual())});}
+  G.financeiro.historico.push({desc:`Bilheteria Rod.${e.rodada}`,val:bill,data:fmtData(getDataAtual())});
+  G.moral=Math.max(0,Math.min(100,G.moral+(res==='V'?10:res==='E'?2:-15)));
+  G.resultados.push({rod:e.rodada,adv:adv.sig,g1:mand?g1:g2,g2:mand?g2:g1,res:res});
+  e.g1=g1;e.g2=g2;e.res=res;
+  G.advAtual=null;
+  marcarEventoComoJogado(e.rodada,e.casa,e.fora);
+}
+function marcarEventoComoJogado(rodada,casa,fora){
+  G.agenda.filter(e=>e.rodada===rodada&&e.casa===casa&&e.fora===fora).forEach(e=>e.status='jogado');
+}
 
 // ===== TEMPO =====
 function getDataAtual(){const d=new Date(2026,2,1);d.setDate(d.getDate()+G.diasPassados);return d;}
@@ -618,7 +723,41 @@ function nav(tela,el){
   if(tela==='elenco')renderElenco();
   if(tela==='treino')renderTreino();
   if(tela==='mercado')renderMerc();
+  if(tela==='liga')renderLiga();
   if(tela==='clube'){abaClube('infra');}
+}
+
+// ===== LIGA =====
+function renderLiga(){
+  if(!G.agenda||!G.agenda.length)G.agenda=gerarAgenda();
+  const dataAtual=getDataAtual();
+  document.getElementById('l-clock').textContent=`${fmtData(dataAtual)} · ${String(G.hora).padStart(2,'0')}:00`;
+  const sorted=[...G.times].sort((a,b)=>b.pts-a.pts||(b.gp-b.gc)-(a.gp-a.gc));
+  const rows=sorted.map((t,i)=>{
+    const eu=t===G.times[0];
+    const esStyle=eu?'border-color:var(--green);color:var(--green);':'';
+    return `<div class="tabr ${eu?'eu':''}">
+      <div class="tpos ${i<4?'top':''}">${i+1}</div>
+      <div class="ttime"><div class="tesc" style="${esStyle}">${t.sig}</div><div class="tnome ${eu?'eu':''}">${t.nome}</div></div>
+      <div class="tnum">${t.j}</div><div class="tnum">${t.v}</div><div class="tnum">${t.d}</div>
+      <div class="tpts" style="color:${eu?'var(--green)':'var(--text)'}">${t.pts}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('l-tabela').innerHTML=`<div class="tab"><div class="tabh"><span>#</span><span>Time</span><span>J</span><span>V</span><span>D</span><span>Pts</span></div>${rows}</div>`;
+  const dias=[...new Set(G.agenda.map(e=>e.data))];
+  const agendaHtml=dias.map(data=>{
+    const entries=G.agenda.filter(e=>e.data===data).sort((a,b)=>a.hora-b.hora).map(e=>{
+      const casa=G.times[e.casa]?.sig||'??';
+      const fora=G.times[e.fora]?.sig||'??';
+      const loc=e.casa===0?'<span style="color:var(--green);font-size:10px;">🏠 Casa</span>':'<span style="color:var(--yellow);font-size:10px;">✈️ Fora</span>';
+      const score=e.status==='jogado'?`${e.g1}-${e.g2}`:'Pendente';
+      const emoji=e.status==='jogado'?e.res==='V'?'🏆':e.res==='E'?'🤝':'😞':'';
+      return `<div class="agenda-entry"><div class="agenda-entry-time">${String(e.hora).padStart(2,'0')}:00</div><div class="agenda-entry-match"><span>${casa}</span><span>vs</span><span>${fora}</span><span style="margin-left:8px; color:var(--muted); font-size:10px;">${loc}</span></div><div class="agenda-status ${e.status}">${score} ${emoji}</div></div>`;
+    }).join('');
+    const diaNome=DIAS_FULL[parseDate(data).getDay()];
+    return `<div class="agenda-day"><div class="agenda-day-header"><span>${data}</span><span>${diaNome}</span></div>${entries}</div>`;
+  }).join('');
+  document.getElementById('l-agenda').innerHTML=agendaHtml||'<div style="color:var(--muted);font-size:12px;">Nenhum jogo agendado.</div>';
 }
 
 // ===== DASHBOARD =====
@@ -1444,6 +1583,8 @@ function finalPartida(meuGols,advGols,adv){
   // Lesão
   if(Math.random()>0.78){const ok=G.jogadores.filter(j=>!j.les);if(ok.length){const vit=ok[rnd(0,ok.length-1)];vit.les=true;}}
 
+  const atualJogo=G.calendario[G.rodada].find(j=>j.casa===0||j.fora===0);
+  if(atualJogo)marcarEventoComoJogado(G.rodada,atualJogo.casa,atualJogo.fora);
   G.resultados.push({rod:G.rodada+1,adv:adv.sig,g1:meuGols,g2:advGols,res});
   G.rodada++;G.advAtual=null;
   G.diaAtual=0;G.diasPassados+=(7-G.diaAtual);G.treinosFeitos=[];
